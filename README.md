@@ -9,7 +9,7 @@
 
 A modern, fully responsive hospital management frontend built with React.js and Tailwind CSS. Patients can book appointments, chat with doctors, download prescriptions and manage their health — all in one platform.
 
-**🔗 Live Demo:** [hospital-frontend.vercel.app](https://hospital-frontend.vercel.app)
+
 **🔗 Backend Repo:** [github.com/AmirSohelSardar/hospitalbackend](https://github.com/AmirSohelSardar/hospitalbackend)
 
 </div>
