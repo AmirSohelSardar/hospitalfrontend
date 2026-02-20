@@ -1,20 +1,113 @@
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { authContext } from '../../context/AuthContext';
 import MyBookings from './MyBookings';
 import Profile from './Profile';
 import useGetProfile from '../../hooks/useFetchData';
-import { BASE_URL } from '../../config';
+import { BASE_URL, getToken } from '../../config';
 import Loading from '../../components/Loader/Loading';
 import Error from '../../components/Error/Error';
 import Chat from '../../pages/Doctors/Chat';
 
+// ── Premium Upgrade Popup ─────────────────────────────────────────────────────
+const PremiumPopup = ({ onClose, onUpgrade, upgrading }) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-yellowColor to-orange-400 px-6 py-5 text-center">
+                <span className="text-4xl">👑</span>
+                <h2 className="text-white text-[22px] font-bold mt-2">Upgrade to Premium</h2>
+                <p className="text-white text-[13px] opacity-90 mt-1">Unlock exclusive features for better healthcare</p>
+            </div>
+
+            {/* Features */}
+            <div className="px-6 py-5">
+                <ul className="space-y-3 mb-6">
+                    <li className="flex items-center gap-3 text-[15px] text-headingColor">
+                        <span className="text-green-500 text-lg">✓</span>
+                        <span><strong>Chat directly</strong> with your booked doctors</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-[15px] text-headingColor">
+                        <span className="text-green-500 text-lg">✓</span>
+                        <span><strong>View health insights</strong> and analytics dashboard</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-[15px] text-headingColor">
+                        <span className="text-green-500 text-lg">✓</span>
+                        <span><strong>Priority support</strong> and exclusive benefits</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-[15px] text-headingColor">
+                        <span className="text-green-500 text-lg">✓</span>
+                        <span><strong>Premium badge</strong> on your profile</span>
+                    </li>
+                </ul>
+
+                <div className="text-center mb-4">
+                    <span className="text-[28px] font-bold text-headingColor">₹999</span>
+                    <span className="text-textColor text-[14px] ml-1">/ lifetime</span>
+                </div>
+
+                <button
+                    onClick={onUpgrade}
+                    disabled={upgrading}
+                    className="w-full bg-yellowColor hover:bg-opacity-90 text-white font-bold text-[16px] py-3 rounded-xl transition disabled:opacity-60"
+                >
+                    {upgrading ? 'Processing...' : '⚡ Upgrade Now'}
+                </button>
+
+                <button
+                    onClick={onClose}
+                    className="w-full mt-3 text-textColor text-[14px] py-2 hover:text-headingColor transition"
+                >
+                    Maybe later
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
+// ── Main MyAccount Component ──────────────────────────────────────────────────
 const MyAccount = () => {
     const { dispatch } = useContext(authContext);
     const [tab, setTab] = useState('bookings');
+    const [showPremiumPopup, setShowPremiumPopup] = useState(false);
+    const [upgrading, setUpgrading] = useState(false);
 
     const { data: userData, loading, error } = useGetProfile(`${BASE_URL}/users/profile/me`);
 
     const isPremiumUser = userData?.isPremiumUser || false;
+
+    // Auto-show popup for non-premium users after 1.5 seconds
+    useEffect(() => {
+        if (userData && !userData.isPremiumUser) {
+            const timer = setTimeout(() => {
+                setShowPremiumPopup(true);
+            }, 1500);
+            return () => clearTimeout(timer);
+        }
+    }, [userData]);
+
+    const handleUpgrade = async () => {
+        setUpgrading(true);
+        try {
+            const res = await fetch(`${BASE_URL}/users/upgrade-to-premium`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`
+                }
+            });
+            const data = await res.json();
+            if (res.ok && data.session?.url) {
+                window.location.href = data.session.url;
+            } else {
+                alert(data.message || 'Failed to start upgrade process');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Something went wrong. Please try again.');
+        } finally {
+            setUpgrading(false);
+        }
+    };
 
     const handleLogout = () => {
         dispatch({ type: 'LOGOUT' });
@@ -25,12 +118,9 @@ const MyAccount = () => {
         try {
             const res = await fetch(`${BASE_URL}/users/${userData._id}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                headers: { Authorization: `Bearer ${getToken()}` }
             });
-            const result = await res.json();
-            if (res.ok) {
-                dispatch({ type: 'LOGOUT' });
-            }
+            if (res.ok) dispatch({ type: 'LOGOUT' });
         } catch (err) {
             console.error(err);
         }
@@ -38,6 +128,15 @@ const MyAccount = () => {
 
     return (
         <section>
+            {/* Premium Popup — auto shows for non-premium users */}
+            {showPremiumPopup && !isPremiumUser && (
+                <PremiumPopup
+                    onClose={() => setShowPremiumPopup(false)}
+                    onUpgrade={handleUpgrade}
+                    upgrading={upgrading}
+                />
+            )}
+
             <div className="max-w-[1170px] px-5 mx-auto">
                 {loading && <Loading />}
                 {error && <Error errMessage={error} />}
@@ -54,11 +153,21 @@ const MyAccount = () => {
                                 <h3 className="text-[18px] text-headingColor font-bold leading-[30px] mt-4">
                                     {userData.name}
                                 </h3>
-                                {isPremiumUser && (
+
+                                {/* Premium badge or upgrade button */}
+                                {isPremiumUser ? (
                                     <span className="bg-yellowColor text-white text-[12px] font-semibold px-3 py-1 rounded-full mt-1">
-                                        Premium User
+                                        👑 Premium User
                                     </span>
+                                ) : (
+                                    <button
+                                        onClick={() => setShowPremiumPopup(true)}
+                                        className="bg-yellowColor hover:bg-opacity-90 text-white text-[12px] font-semibold px-3 py-1 rounded-full mt-1 transition"
+                                    >
+                                        ⚡ Upgrade to Premium
+                                    </button>
                                 )}
+
                                 <p className="text-textColor text-[15px] leading-6 mt-2">{userData.email}</p>
                                 <p className="text-textColor text-[15px] leading-6">
                                     Blood Type: <span className="font-semibold ml-1">{userData.bloodType}</span>
@@ -95,7 +204,7 @@ const MyAccount = () => {
                                     My Bookings
                                 </button>
 
-                                {/* Chat tab — only for premium users */}
+                                {/* Chat — premium only */}
                                 {isPremiumUser && (
                                     <button
                                         onClick={() => setTab('chat')}
@@ -105,6 +214,26 @@ const MyAccount = () => {
                                                 : 'border border-primaryColor text-headingColor'}`}
                                     >
                                         💬 Chat with Doctor
+                                    </button>
+                                )}
+
+                                {/* Insights — premium only, shows locked button for non-premium */}
+                                {isPremiumUser ? (
+                                    <button
+                                        onClick={() => setTab('insights')}
+                                        className={`px-5 py-2 rounded-md font-semibold text-[14px] transition
+                                            ${tab === 'insights'
+                                                ? 'bg-primaryColor text-white'
+                                                : 'border border-primaryColor text-headingColor'}`}
+                                    >
+                                        📊 View Insights
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => setShowPremiumPopup(true)}
+                                        className="px-5 py-2 rounded-md font-semibold text-[14px] border border-yellowColor text-yellowColor hover:bg-yellowColor hover:text-white transition"
+                                    >
+                                        👑 View Insights (Premium Only)
                                     </button>
                                 )}
 
@@ -121,11 +250,12 @@ const MyAccount = () => {
 
                             {/* Tab Content */}
                             {tab === 'bookings' && <MyBookings />}
-
-                            {tab === 'chat' && isPremiumUser && (
-                                <PatientChatSelector userId={userData._id} />
+                            {tab === 'chat' && isPremiumUser && <PatientChatSelector userId={userData._id} />}
+                            {tab === 'insights' && isPremiumUser && (
+                                <div className="text-center py-10 text-textColor">
+                                    📊 Insights coming soon...
+                                </div>
                             )}
-
                             {tab === 'settings' && <Profile user={userData} />}
                         </div>
                     </div>
@@ -135,10 +265,7 @@ const MyAccount = () => {
     );
 };
 
-// ── Patient picks which doctor to chat with (from their bookings) ─────────────
-import { useEffect } from 'react';
-import { getToken } from '../../config';
-
+// ── Patient picks which doctor to chat with ───────────────────────────────────
 const PatientChatSelector = ({ userId }) => {
     const [bookedDoctors, setBookedDoctors] = useState([]);
     const [selectedDoctor, setSelectedDoctor] = useState(null);
@@ -152,7 +279,6 @@ const PatientChatSelector = ({ userId }) => {
                 });
                 const data = await res.json();
                 if (res.ok && data.data) {
-                    // Get unique doctors from bookings
                     const seen = new Set();
                     const unique = data.data
                         .filter(b => b.isPaid && b.doctor)
@@ -187,7 +313,6 @@ const PatientChatSelector = ({ userId }) => {
 
     return (
         <div>
-            {/* Doctor selector if multiple bookings */}
             {bookedDoctors.length > 1 && (
                 <div className="flex flex-wrap gap-3 mb-5">
                     {bookedDoctors.map(doctor => (
@@ -205,11 +330,7 @@ const PatientChatSelector = ({ userId }) => {
                     ))}
                 </div>
             )}
-
-            {selectedDoctor && (
-                <Chat doctorId={selectedDoctor._id} />
-            )}
-
+            {selectedDoctor && <Chat doctorId={selectedDoctor._id} />}
             {!selectedDoctor && bookedDoctors.length > 1 && (
                 <div className="text-center text-gray-400 py-10">
                     Select a doctor above to start chatting
