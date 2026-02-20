@@ -1,4 +1,4 @@
-export const BASE_URL = import.meta.env.VITE_BASE_URL || 'http://localhost:5000/api/v1';
+export const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://hospitalbackend-pi.vercel.app/api/v1';
 
 // Always read fresh from localStorage
 export const getToken = () => localStorage.getItem('token');
